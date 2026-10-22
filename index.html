@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Workflow Studio & Generator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            user-select: none;
+        }
+
+        /* Palette Formula Yellow */
+        .bg-formula { background-color: #FDB913; }
+        .border-formula { border-color: #FDB913; }
+        .text-formula { color: #d99a00; }
+        .hover\:bg-formula-dark:hover { background-color: #e5a50d; }
+
+        /* Canvas Grid Background */
+        .canvas-bg {
+            background-color: #f1f5f9;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+
+        /* Node Hover Effects */
+        .wf-node {
+            transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+        }
+        .wf-node:hover {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        .wf-node.selected {
+            border-color: #FDB913 !important;
+            ring: 3px;
+            ring-color: #FDB913;
+            box-shadow: 0 0 0 3px rgba(253, 185, 19, 0.4);
+        }
+        .wf-node.connecting-source {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Connection line styles */
+        .connection-line {
+            stroke: #64748b;
+            stroke-width: 2.5;
+            fill: none;
+            transition: stroke 0.2s, stroke-width 0.2s;
+        }
+        .connection-line:hover {
+            stroke: #FDB913;
+            stroke-width: 4;
+            cursor: pointer;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-100 text-slate-800">
+
+    <!-- Top Navigation Header -->
+    <header class="h-16 bg-slate-900 text-white flex items-center justify-between px-6 z-20 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-formula flex items-center justify-center font-bold text-slate-950 text-xl shadow">
+                F
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight flex items-center gap-2">
+                    <span>ERP Workflow Studio</span>
+                    <span class="text-xs bg-formula/20 text-formula px-2 py-0.5 rounded border border-formula/30 font-normal">v2.0</span>
+                </h1>
+                <p class="text-xs text-slate-400">Generatore di Processi Interattivi Formula</p>
+            </div>
+        </div>
+
+        <!-- Dynamic Workflow Title Bar -->
+        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 min-w-[280px]">
+            <i data-lucide="edit-3" class="w-4 h-4 text-slate-400 mr-2"></i>
+            <input type="text" id="workflowTitleInput" value="Gestione Flusso Operativo" 
+                class="bg-transparent text-white font-semibold text-sm focus:outline-none w-full placeholder-slate-500"
+                placeholder="Titolo Workflow..." title="Clicca per modificare il titolo">
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-3">
+            <button id="btnNewBlank" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition">
+                <i data-lucide="file-plus" class="w-4 h-4"></i>
+                <span>Foglio Bianco</span>
+            </button>
+            <button id="btnConnectMode" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition">
+                <i data-lucide="git-commit" class="w-4 h-4"></i>
+                <span id="connectBtnText">Collega Nodi</span>
+            </button>
+            <button id="btnExportCode" class="flex items-center gap-2 px-4 py-1.5 text-xs font-bold bg-formula hover:bg-formula-dark text-slate-950 rounded-lg shadow-sm transition">
+                <i data-lucide="code" class="w-4 h-4"></i>
+                <span>Esporta HTML</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- Left Sidebar: Tools & Node Properties -->
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col z-10 shadow-sm overflow-y-auto">
+            
+            <!-- Tab Headers -->
+            <div class="flex border-b border-slate-200 bg-slate-50">
+                <button id="tabNodesBtn" class="flex-1 py-3 text-xs font-semibold text-slate-700 border-b-2 border-formula bg-white">
+                    <i data-lucide="plus-circle" class="w-4 h-4 inline mr-1"></i> Aggiungi Label
+                </button>
+                <button id="tabEditBtn" class="flex-1 py-3 text-xs font-semibold text-slate-500 hover:text-slate-700 border-b-2 border-transparent">
+                    <i data-lucide="sliders" class="w-4 h-4 inline mr-1"></i> Proprietà
+                </button>
+            </div>
+
+            <!-- Panel 1: Add Node -->
+            <div id="panelAddNode" class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Label / Step</label>
+                    <input type="text" id="nodeLabelInput" placeholder="es. Ordine d'Acquisto" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Sottotitolo / Descrizione</label>
+                    <input type="text" id="nodeSubInput" placeholder="es. Emissione & Approvazione" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Icona Lucide</label>
+                    <div class="grid grid-cols-5 gap-2 pt-1" id="iconPicker">
+                        <!-- Icon options injected via JS -->
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Badge di Stato / Categoria</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="nodeBadgeInput" placeholder="es. ACQUISTI" class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                        <input type="color" id="nodeBadgeColor" value="#3b82f6" class="w-10 h-9 p-1 border border-slate-300 rounded-lg cursor-pointer">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Azione / URL ERP (al click)</label>
+                    <input type="text" id="nodeUrlInput" placeholder="es. /erp/purchase-orders/new" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    <p class="text-[10px] text-slate-400 mt-1">Invia `postMessage` o naviga all'URL specificato.</p>
+                </div>
+
+                <button id="btnAddNode" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-lg shadow flex items-center justify-center gap-2 transition">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Inserisci nel Workflow
+                </button>
+
+                <hr class="border-slate-200 my-4">
+
+                <!-- Preset Templates -->
+                <div>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Preset Rapidi</span>
+                    <div class="space-y-2">
+                        <button id="presetProcurement" class="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-formula hover:bg-amber-50/50 transition flex items-center justify-between group">
+                            <div>
+                                <div class="text-xs font-semibold text-slate-800">Ciclo Acquisti (Procurement)</div>
+                                <div class="text-[10px] text-slate-500">RDA, Ordine, DdT, Fattura</div>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-formula"></i>
+                        </button>
+                        <button id="presetSales" class="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-formula hover:bg-amber-50/50 transition flex items-center justify-between group">
+                            <div>
+                                <div class="text-xs font-semibold text-slate-800">Ciclo Vendite (Sales)</div>
+                                <div class="text-[10px] text-slate-500">Offerta, Ordine, Spedizione, Incasso</div>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-formula"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 2: Edit Selected Node -->
+            <div id="panelEditNode" class="p-5 space-y-4 hidden">
+                <div id="noSelectionMsg" class="text-center py-8 text-slate-400 text-xs">
+                    <i data-lucide="mouse-pointer-click" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                    Seleziona una label nel canvas per modificarne le proprietà o eliminarla.
+                </div>
+
+                <div id="editForm" class="space-y-4 hidden">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-200">
+                        <span class="text-xs font-bold text-slate-700 uppercase">Modifica Label</span>
+                        <button id="btnDeleteSelectedNode" class="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 font-medium">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Elimina
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Titolo Label</label>
+                        <input type="text" id="editNodeTitle" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Sottotitolo</label>
+                        <input type="text" id="editNodeSub" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Testo Badge</label>
+                        <input type="text" id="editNodeBadge" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">URL / Azione ERP</label>
+                        <input type="text" id="editNodeUrl" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Canvas Workspace -->
+        <main class="flex-1 relative canvas-bg overflow-auto p-8" id="canvasContainer">
+            
+            <!-- Top Floating Info Banner -->
+            <div class="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span id="canvasHeaderTitle" class="text-xs font-bold text-slate-700">Gestione Flusso Operativo</span>
+                <span class="text-xs text-slate-400">| Drag&Drop per spostare • Clicca 'Collega' per unire</span>
+            </div>
+
+            <!-- Interactive SVG Overlay for Connections -->
+            <svg id="svgConnections" class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-width: 2000px; min-height: 2000px;">
+                <defs>
+                    <!-- Standard Marker Arrow -->
+                    <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                    </marker>
+                    <!-- Active/Hover Arrow Marker -->
+                    <marker id="arrowhead-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#FDB913"/>
+                    </marker>
+                </defs>
+            </svg>
+
+            <!-- Container for Workflow Nodes -->
+            <div id="nodesContainer" class="relative w-[2000px] h-[2000px] z-10">
+                <!-- Nodes dynamically injected here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200">
+            <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="code" class="w-5 h-5 text-formula"></i>
+                    <h3 class="font-bold text-base">Codice HTML Stand-alone Generato</h3>
+                </div>
+                <button id="btnCloseModal" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-600">
+                    Copia o scarica questo unico file HTML. Include già le dipendenze Tailwind CSS e Lucide Icons, la palette **Formula Pantone Yellow (#FDB913)** ed il supporto `postMessage` per la navigazione ERP.
+                </p>
+                <textarea id="exportedCodeTextarea" readonly class="w-full h-72 font-mono text-xs bg-slate-900 text-amber-300 p-4 rounded-lg focus:outline-none resize-none"></textarea>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button id="btnCopyCode" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5">
+                        <i data-lucide="copy" class="w-4 h-4"></i> Copia Codice
+                    </button>
+                    <button id="btnDownloadHtml" class="px-4 py-2 bg-formula hover:bg-formula-dark text-slate-950 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow">
+                        <i data-lucide="download" class="w-4 h-4"></i> Scarica .html
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl text-xs font-medium z-50 flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300">
+        <i data-lucide="check-circle" class="w-4 h-4 text-formula"></i>
+        <span id="toastMsg">Operazione completata</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // --- State Management ---
+        let state = {
+            title: "Gestione Flusso Operativo",
+            nodes: [],
+            connections: [], // { id, from, to, label }
+            selectedNodeId: null,
+            connectingSourceId: null,
+            isConnectingMode: false,
+            selectedIcon: "file-text"
+        };
+
+        const AVAILABLE_ICONS = [
+            "file-text", "shopping-cart", "truck", "receipt", "check-square",
+            "package", "users", "credit-card", "database", "settings",
+            "archive", "mail", "bar-chart", "clipboard", "box"
+        ];
+
+        // Default Presets
+        const PRESETS = {
+            procurement: {
+                title: "Ciclo Passivo / Acquisti",
+                nodes: [
+                    { id: "n1", x: 80, y: 150, title: "Richiesta d'Acquisto", sub: "RDA Utente / Reparto", icon: "file-text", badge: "RDA", badgeColor: "#3b82f6", url: "/erp/rda/new" },
+                    { id: "n2", x: 380, y: 150, title: "Ordine a Fornitore", sub: "Emissione & Invio ODA", icon: "shopping-cart", badge: "ODA", badgeColor: "#f59e0b", url: "/erp/orders/purchase" },
+                    { id: "n3", x: 680, y: 150, title: "Ricevimento Merce", sub: "Registrazione DdT / Magazzino", icon: "truck", badge: "DDT", badgeColor: "#10b981", url: "/erp/warehouse/goods-receive" },
+                    { id: "n4", x: 980, y: 150, title: "Fattura Passiva", sub: "Controllo & Contabilizzazione", icon: "receipt", badge: "FATTURA", badgeColor: "#8b5cf6", url: "/erp/invoices/incoming" }
+                ],
+                connections: [
+                    { id: "c1", from: "n1", to: "n2", label: "Approvazione" },
+                    { id: "c2", from: "n2", to: "n3", label: "Consegna" },
+                    { id: "c3", from: "n3", to: "n4", label: "Fatturazione" },
+                    { id: "c4", from: "n3", to: "n1", label: "Reso / Contesto" } // Loop back example
+                ]
+            },
+            sales: {
+                title: "Ciclo Attivo / Vendite",
+                nodes: [
+                    { id: "s1", x: 80, y: 150, title: "Offerta Commerciale", sub: "Preventivo Cliente", icon: "file-text", badge: "PREVENTIVO", badgeColor: "#06b6d4", url: "/erp/quotes/new" },
+                    { id: "s2", x: 380, y: 150, title: "Ordine di Vendita", sub: "Conferma d'Ordine", icon: "shopping-cart", badge: "ORDINE", badgeColor: "#3b82f6", url: "/erp/orders/sales" },
+                    { id: "s3", x: 680, y: 150, title: "Spedizione / DdT", sub: "Evasione da Magazzino", icon: "package", badge: "SPEDIZIONE", badgeColor: "#10b981", url: "/erp/shipping/ddt" },
+                    { id: "s4", x: 980, y: 150, title: "Fattura Attiva", sub: "Emissione Fattura", icon: "receipt", badge: "FATTURA", badgeColor: "#ec4899", url: "/erp/invoices/outgoing" }
+                ],
+                connections: [
+                    { id: "cs1", from: "s1", to: "s2", label: "Accettazione" },
+                    { id: "cs2", from: "s2", to: "s3", label: "Preparazione" },
+                    { id: "cs3", from: "s3", to: "s4", label: "Contabilità" }
+                ]
+            }
+        };
+
+        // --- DOM Elements ---
+        const nodesContainer = document.getElementById('nodesContainer');
+        const svgConnections = document.getElementById('svgConnections');
+        const workflowTitleInput = document.getElementById('workflowTitleInput');
+        const canvasHeaderTitle = document.getElementById('canvasHeaderTitle');
+
+        // --- Initialization ---
+        window.addEventListener('DOMContentLoaded', () => {
+            initIconPicker();
+            loadPreset('procurement');
+            setupEventListeners();
+            lucide.createIcons();
+        });
+
+        function setupEventListeners() {
+            // Workflow Title Binding
+            workflowTitleInput.addEventListener('input', (e) => {
+                state.title = e.target.value || "Workflow ERP";
+                canvasHeaderTitle.textContent = state.title;
+            });
+
+            // Buttons
+            document.getElementById('btnNewBlank').addEventListener('click', loadBlankCanvas);
+            document.getElementById('btnAddNode').addEventListener('click', handleAddNode);
+            document.getElementById('btnConnectMode').addEventListener('click', toggleConnectMode);
+            document.getElementById('btnExportCode').addEventListener('click', openExportModal);
+            document.getElementById('btnCloseModal').addEventListener('click', closeExportModal);
+            document.getElementById('btnCopyCode').addEventListener('click', copyExportedCode);
+            document.getElementById('btnDownloadHtml').addEventListener('click', downloadExportedHtml);
+
+            // Presets
+            document.getElementById('presetProcurement').addEventListener('click', () => loadPreset('procurement'));
+            document.getElementById('presetSales').addEventListener('click', () => loadPreset('sales'));
+
+            // Edit Panel Controls
+            document.getElementById('btnDeleteSelectedNode').addEventListener('click', deleteSelectedNode);
+            document.getElementById('editNodeTitle').addEventListener('input', updateSelectedNodeFromForm);
+            document.getElementById('editNodeSub').addEventListener('input', updateSelectedNodeFromForm);
+            document.getElementById('editNodeBadge').addEventListener('input', updateSelectedNodeFromForm);
+            document.getElementById('editNodeUrl').addEventListener('input', updateSelectedNodeFromForm);
+
+            // Tabs
+            document.getElementById('tabNodesBtn').addEventListener('click', () => switchTab('add'));
+            document.getElementById('tabEditBtn').addEventListener('click', () => switchTab('edit'));
+
+            // Canvas Click (Deselect)
+            document.getElementById('canvasContainer').addEventListener('click', (e) => {
+                if (e.target.id === 'canvasContainer' || e.target.id === 'nodesContainer' || e.target.tagName === 'svg') {
+                    selectNode(null);
+                }
+            });
+        }
+
+        function initIconPicker() {
+            const picker = document.getElementById('iconPicker');
+            picker.innerHTML = '';
+            AVAILABLE_ICONS.forEach(iconName => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `p-2 rounded-lg border text-slate-600 hover:border-formula hover:bg-amber-50 flex items-center justify-center transition ${state.selectedIcon === iconName ? 'border-formula bg-amber-50 text-slate-900 ring-2 ring-formula/40' : 'border-slate-200'}`;
+                btn.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+                btn.addEventListener('click', () => {
+                    state.selectedIcon = iconName;
+                    initIconPicker();
+                });
+                picker.appendChild(btn);
+            });
+            lucide.createIcons();
+        }
+
+        // --- Preset / Blank Loaders ---
+        function loadBlankCanvas() {
+            state.title = "Nuovo Workflow ERP";
+            workflowTitleInput.value = state.title;
+            canvasHeaderTitle.textContent = state.title;
+            state.nodes = [];
+            state.connections = [];
+            selectNode(null);
+            renderWorkflow();
+            showToast("Foglio bianco creato");
+        }
+
+        function loadPreset(key) {
+            const preset = PRESETS[key];
+            if (!preset) return;
+            state.title = preset.title;
+            workflowTitleInput.value = preset.title;
+            canvasHeaderTitle.textContent = preset.title;
+            state.nodes = JSON.parse(JSON.stringify(preset.nodes));
+            state.connections = JSON.parse(JSON.stringify(preset.connections));
+            selectNode(null);
+            renderWorkflow();
+            showToast(`Preset "${preset.title}" caricato`);
+        }
+
+        // --- Node Operations ---
+        function handleAddNode() {
+            const labelInput = document.getElementById('nodeLabelInput');
+            const subInput = document.getElementById('nodeSubInput');
+            const badgeInput = document.getElementById('nodeBadgeInput');
+            const badgeColor = document.getElementById('nodeBadgeColor').value;
+            const urlInput = document.getElementById('nodeUrlInput');
+
+            const title = labelInput.value.trim() || "Nuovo Step";
+            const sub = subInput.value.trim() || "Descrizione opzionale";
+            const badge = badgeInput.value.trim().toUpperCase() || "STEP";
+            const url = urlInput.value.trim() || "#";
+
+            // Offset new nodes
+            const offset = (state.nodes.length * 40) % 200;
+            const newNode = {
+                id: 'node_' + Date.now(),
+                x: 100 + offset,
+                y: 150 + offset,
+                title: title,
+                sub: sub,
+                icon: state.selectedIcon,
+                badge: badge,
+                badgeColor: badgeColor,
+                url: url
+            };
+
+            state.nodes.push(newNode);
+            labelInput.value = '';
+            subInput.value = '';
+            badgeInput.value = '';
+            urlInput.value = '';
+
+            renderWorkflow();
+            selectNode(newNode.id);
+            showToast("Label aggiunta al workflow");
+        }
+
+        function deleteSelectedNode() {
+            if (!state.selectedNodeId) return;
+            const id = state.selectedNodeId;
+            state.nodes = state.nodes.filter(n => n.id !== id);
+            state.connections = state.connections.filter(c => c.from !== id && c.to !== id);
+            selectNode(null);
+            renderWorkflow();
+            showToast("Label eliminata");
+        }
+
+        function updateSelectedNodeFromForm() {
+            if (!state.selectedNodeId) return;
+            const node = state.nodes.find(n => n.id === state.selectedNodeId);
+            if (!node) return;
+
+            node.title = document.getElementById('editNodeTitle').value;
+            node.sub = document.getElementById('editNodeSub').value;
+            node.badge = document.getElementById('editNodeBadge').value.toUpperCase();
+            node.url = document.getElementById('editNodeUrl').value;
+
+            renderWorkflow();
+        }
+
+        function selectNode(id) {
+            state.selectedNodeId = id;
+
+            // Handle connection click mode
+            if (state.isConnectingMode && id) {
+                if (!state.connectingSourceId) {
+                    state.connectingSourceId = id;
+                    showToast("Ora clicca la label di destinazione");
+                    renderWorkflow();
+                    return;
+                } else if (state.connectingSourceId !== id) {
+                    // Create connection
+                    const exists = state.connections.some(c => c.from === state.connectingSourceId && c.to === id);
+                    if (!exists) {
+                        const connLabel = prompt("Etichetta del collegamento (opzionale, es. Approvazione):", "") || "";
+                        state.connections.push({
+                            id: 'conn_' + Date.now(),
+                            from: state.connectingSourceId,
+                            to: id,
+                            label: connLabel
+                        });
+                        showToast("Collegamento creato!");
+                    }
+                    state.connectingSourceId = null;
+                    state.isConnectingMode = false;
+                    updateConnectBtnUI();
+                    renderWorkflow();
+                    return;
+                }
+            }
+
+            // Normal selection
+            if (id) {
+                switchTab('edit');
+                const node = state.nodes.find(n => n.id === id);
+                if (node) {
+                    document.getElementById('noSelectionMsg').classList.add('hidden');
+                    document.getElementById('editForm').classList.remove('hidden');
+                    document.getElementById('editNodeTitle').value = node.title || '';
+                    document.getElementById('editNodeSub').value = node.sub || '';
+                    document.getElementById('editNodeBadge').value = node.badge || '';
+                    document.getElementById('editNodeUrl').value = node.url || '';
+                }
+            } else {
+                document.getElementById('noSelectionMsg').classList.remove('hidden');
+                document.getElementById('editForm').classList.add('hidden');
+            }
+
+            renderWorkflow();
+        }
+
+        function toggleConnectMode() {
+            state.isConnectingMode = !state.isConnectingMode;
+            state.connectingSourceId = null;
+            updateConnectBtnUI();
+            if (state.isConnectingMode) {
+                showToast("Seleziona la prima label da collegare");
+            }
+            renderWorkflow();
+        }
+
+        function updateConnectBtnUI() {
+            const btn = document.getElementById('btnConnectMode');
+            const txt = document.getElementById('connectBtnText');
+            if (state.isConnectingMode) {
+                btn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg transition shadow animate-pulse";
+                txt.textContent = "Seleziona Nodi...";
+            } else {
+                btn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition";
+                txt.textContent = "Collega Nodi";
+            }
+        }
+
+        function switchTab(tab) {
+            const addBtn = document.getElementById('tabNodesBtn');
+            const editBtn = document.getElementById('tabEditBtn');
+            const addPanel = document.getElementById('panelAddNode');
+            const editPanel = document.getElementById('panelEditNode');
+
+            if (tab === 'add') {
+                addBtn.className = "flex-1 py-3 text-xs font-semibold text-slate-700 border-b-2 border-formula bg-white";
+                editBtn.className = "flex-1 py-3 text-xs font-semibold text-slate-500 hover:text-slate-700 border-b-2 border-transparent bg-slate-50";
+                addPanel.classList.remove('hidden');
+                editPanel.classList.add('hidden');
+            } else {
+                editBtn.className = "flex-1 py-3 text-xs font-semibold text-slate-700 border-b-2 border-formula bg-white";
+                addBtn.className = "flex-1 py-3 text-xs font-semibold text-slate-500 hover:text-slate-700 border-b-2 border-transparent bg-slate-50";
+                editPanel.classList.remove('hidden');
+                addPanel.classList.add('hidden');
+            }
+        }
+
+        // --- Render Engine ---
+        function renderWorkflow() {
+            // 1. Render Nodes
+            nodesContainer.innerHTML = '';
+            state.nodes.forEach(node => {
+                const isSelected = node.id === state.selectedNodeId;
+                const isConnSource = node.id === state.connectingSourceId;
+
+                const nodeEl = document.createElement('div');
+                nodeEl.id = node.id;
+                nodeEl.className = `absolute wf-node bg-white rounded-xl border-2 shadow-md p-4 w-60 cursor-move ${isSelected ? 'selected border-formula' : isConnSource ? 'connecting-source' : 'border-slate-200'}`;
+                nodeEl.style.left = `${node.x}px`;
+                nodeEl.style.top = `${node.y}px`;
+
+                nodeEl.innerHTML = `
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="w-9 h-9 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center font-bold">
+                            <i data-lucide="${node.icon || 'file-text'}" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white shadow-sm" style="background-color: ${node.badgeColor || '#3b82f6'}">
+                            ${node.badge || 'STEP'}
+                        </span>
+                    </div>
+                    <h4 class="font-bold text-sm text-slate-800 leading-tight">${node.title}</h4>
+                    <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">${node.sub || ''}</p>
+                    <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span class="truncate max-w-[140px] font-mono">${node.url || '#'}</span>
+                        <i data-lucide="external-link" class="w-3 h-3 text-slate-400"></i>
+                    </div>
+                `;
+
+                // Events
+                nodeEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectNode(node.id);
+                });
+
+                makeDraggable(nodeEl, node);
+                nodesContainer.appendChild(nodeEl);
+            });
+
+            // 2. Render SVG Lines/Arrows
+            renderConnections();
+            lucide.createIcons();
+        }
+
+        function renderConnections() {
+            // Keep markers
+            const defs = svgConnections.querySelector('defs').outerHTML;
+            svgConnections.innerHTML = defs;
+
+            state.connections.forEach(conn => {
+                const source = state.nodes.find(n => n.id === conn.from);
+                const target = state.nodes.find(n => n.id === conn.to);
+                if (!source || !target) return;
+
+                // Card Dimensions (w-60 -> 240px width, height ~ 120px)
+                const nodeWidth = 240;
+                const nodeHeight = 120;
+
+                // Calculate Centers/Anchors
+                const sX = source.x + nodeWidth / 2;
+                const sY = source.y + nodeHeight / 2;
+                const tX = target.x + nodeWidth / 2;
+                const tY = target.y + nodeHeight / 2;
+
+                let pathData = "";
+                let labelX = (sX + tX) / 2;
+                let labelY = (sY + tY) / 2;
+
+                // Is it a return/loop connection? (target is to the left or vertical return)
+                const isReturn = target.x < source.x;
+
+                if (isReturn) {
+                    // Curved arc above or below
+                    const curveOffset = Math.abs(sX - tX) * 0.4 + 50;
+                    const controlY = Math.min(sY, tY) - curveOffset;
+                    pathData = `M ${sX} ${source.y} C ${sX} ${controlY}, ${tX} ${controlY}, ${tX} ${target.y}`;
+                    labelY = controlY + 15;
+                } else {
+                    // Direct smooth bezier curve horizontally
+                    const dx = Math.abs(tX - sX) * 0.5;
+                    pathData = `M ${source.x + nodeWidth} ${sY} C ${source.x + nodeWidth + dx} ${sY}, ${target.x - dx} ${tY}, ${target.x} ${tY}`;
+                }
+
+                // Path Element
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', pathData);
+                path.setAttribute('class', 'connection-line');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+                
+                // Allow deleting connection on click
+                path.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm("Vuoi rimuovere questo collegamento?")) {
+                        state.connections = state.connections.filter(c => c.id !== conn.id);
+                        renderWorkflow();
+                        showToast("Collegamento rimosso");
+                    }
+                });
+
+                svgConnections.appendChild(path);
+
+                // Connection Label Badge if exists
+                if (conn.label) {
+                    const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    textGroup.setAttribute('transform', `translate(${labelX}, ${labelY})`);
+
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', -conn.label.length * 3.5 - 8);
+                    rect.setAttribute('y', -10);
+                    rect.setAttribute('width', conn.label.length * 7 + 16);
+                    rect.setAttribute('height', 20);
+                    rect.setAttribute('rx', 10);
+                    rect.setAttribute('fill', '#ffffff');
+                    rect.setAttribute('stroke', '#cbd5e1');
+                    rect.setAttribute('stroke-width', '1');
+
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('dy', '4');
+                    text.setAttribute('font-size', '10');
+                    text.setAttribute('font-weight', '600');
+                    text.setAttribute('fill', '#475569');
+                    text.textContent = conn.label;
+
+                    textGroup.appendChild(rect);
+                    textGroup.appendChild(text);
+                    svgConnections.appendChild(textGroup);
+                }
+            });
+        }
+
+        // --- Drag & Drop Mechanics ---
+        function makeDraggable(element, nodeData) {
+            let startX = 0, startY = 0, initialNodeX = 0, initialNodeY = 0;
+
+            element.addEventListener('mousedown', dragMouseDown);
+
+            function dragMouseDown(e) {
+                if (e.target.closest('button')) return; // Ignore button clicks inside node
+                e.preventDefault();
+                startX = e.clientX;
+                startY = e.clientY;
+                initialNodeX = nodeData.x;
+                initialNodeY = nodeData.y;
+
+                document.addEventListener('mousemove', elementDrag);
+                document.addEventListener('mouseup', closeDragElement);
+            }
+
+            function elementDrag(e) {
+                e.preventDefault();
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                // Snap to grid of 10px
+                nodeData.x = Math.max(20, Math.round((initialNodeX + dx) / 10) * 10);
+                nodeData.y = Math.max(20, Math.round((initialNodeY + dy) / 10) * 10);
+
+                element.style.left = `${nodeData.x}px`;
+                element.style.top = `${nodeData.y}px`;
+
+                renderConnections(); // Live redraw lines
+            }
+
+            function closeDragElement() {
+                document.removeEventListener('mousemove', elementDrag);
+                document.removeEventListener('mouseup', closeDragElement);
+            }
+        }
+
+        // --- Export Generator ---
+        function openExportModal() {
+            const htmlCode = generateStandaloneHTML();
+            document.getElementById('exportedCodeTextarea').value = htmlCode;
+            document.getElementById('exportModal').classList.remove('hidden');
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').classList.add('hidden');
+        }
+
+        function copyExportedCode() {
+            const textarea = document.getElementById('exportedCodeTextarea');
+            textarea.select();
+            document.execCommand('copy');
+            showToast("Codice copiato negli appunti!");
+        }
+
+        function downloadExportedHtml() {
+            const code = document.getElementById('exportedCodeTextarea').value;
+            const blob = new Blob([code], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${state.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_workflow.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Download file HTML avviato!");
+        }
+
+        function generateStandaloneHTML() {
+            const jsonNodes = JSON.stringify(state.nodes, null, 2);
+            const jsonConns = JSON.stringify(state.connections, null, 2);
+
+            return `<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${state.title} - ERP Workflow</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"><\/script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .bg-formula { background-color: #FDB913; }
+        .border-formula { border-color: #FDB913; }
+        .text-formula { color: #d99a00; }
+        .canvas-bg {
+            background-color: #f1f5f9;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+        .wf-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .wf-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.15);
+        }
+        .connection-line { stroke: #64748b; stroke-width: 2.5; fill: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+
+    <!-- Header Banner Formula -->
+    <header class="bg-slate-900 text-white border-b-4 border-formula px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-formula flex items-center justify-center font-black text-slate-950 text-xl shadow">
+                F
+            </div>
+            <div>
+                <h1 class="font-bold text-xl leading-tight text-white">${state.title}</h1>
+                <p class="text-xs text-slate-400">Workflow Operativo Interactive ERP</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2 text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-slate-300">
+            <i data-lucide="info" class="w-4 h-4 text-formula"></i>
+            <span>Clicca su qualsiasi fase per aprire l'azione corrispondente</span>
+        </div>
+    </header>
+
+    <!-- Workflow Canvas Grid -->
+    <main class="flex-1 relative canvas-bg overflow-auto p-8 min-h-[600px]" id="canvas">
+        <svg id="svgOverlay" class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-width: 1500px; min-height: 1000px;">
+            <defs>
+                <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                </marker>
+            </defs>
+        </svg>
+
+        <div id="nodesRender" class="relative z-10 w-full h-full"></div>
+    </main>
+
+    <!-- Footer Status -->
+    <footer class="bg-white border-t border-slate-200 px-6 py-3 text-xs text-slate-500 flex justify-between items-center">
+        <span>Sistema ERP Formula Suite</span>
+        <span>Generato automaticamente • Ready for Production</span>
+    </footer>
+
+    <script>
+        const nodes = ${jsonNodes};
+        const connections = ${jsonConns};
+
+        function init() {
+            const container = document.getElementById('nodesRender');
+            const svg = document.getElementById('svgOverlay');
+
+            // Render Nodes
+            nodes.forEach(node => {
+                const card = document.createElement('div');
+                card.className = "absolute wf-card bg-white rounded-xl border border-slate-200 shadow-md p-4 w-60 cursor-pointer hover:border-formula";
+                card.style.left = node.x + 'px';
+                card.style.top = node.y + 'px';
+                card.onclick = () => handleNodeClick(node);
+
+                card.innerHTML = \`
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="w-9 h-9 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center font-bold">
+                            <i data-lucide="\${node.icon || 'file-text'}" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white shadow-sm" style="background-color: \${node.badgeColor || '#3b82f6'}">
+                            \${node.badge || 'STEP'}
+                        </span>
+                    </div>
+                    <h4 class="font-bold text-sm text-slate-800 leading-tight">\${node.title}</h4>
+                    <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">\${node.sub || ''}</p>
+                    <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-amber-600 font-semibold">
+                        <span>Esegui azione</span>
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </div>
+                \`;
+                container.appendChild(card);
+            });
+
+            // Render Connections
+            connections.forEach(conn => {
+                const src = nodes.find(n => n.id === conn.from);
+                const tgt = nodes.find(n => n.id === conn.to);
+                if (!src || !tgt) return;
+
+                const nodeWidth = 240, nodeHeight = 120;
+                const sX = src.x + nodeWidth / 2, sY = src.y + nodeHeight / 2;
+                const tX = tgt.x + nodeWidth / 2, tY = tgt.y + nodeHeight / 2;
+
+                const isReturn = tgt.x < src.x;
+                let pathData = "";
+                let labelX = (sX + tX) / 2;
+                let labelY = (sY + tY) / 2;
+
+                if (isReturn) {
+                    const curveOffset = Math.abs(sX - tX) * 0.4 + 50;
+                    const controlY = Math.min(sY, tY) - curveOffset;
+                    pathData = \`M \${sX} \${src.y} C \${sX} \${controlY}, \${tX} \${controlY}, \${tX} \${tgt.y}\`;
+                    labelY = controlY + 15;
+                } else {
+                    const dx = Math.abs(tX - sX) * 0.5;
+                    pathData = \`M \${src.x + nodeWidth} \${sY} C \${src.x + nodeWidth + dx} \${sY}, \${tgt.x - dx} \${tY}, \${tgt.x} \${tY}\`;
+                }
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', pathData);
+                path.setAttribute('class', 'connection-line');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+                svg.appendChild(path);
+
+                if (conn.label) {
+                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.setAttribute('transform', \`translate(\${labelX}, \${labelY})\`);
+                    g.innerHTML = \`<rect x="\${-conn.label.length * 3.5 - 8}" y="-10" width="\${conn.label.length * 7 + 16}" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/><text text-anchor="middle" dy="4" font-size="10" font-weight="600" fill="#475569">\${conn.label}</text>\`;
+                    svg.appendChild(g);
+                }
+            });
+
+            lucide.createIcons();
+        }
+
+        function handleNodeClick(node) {
+            // PostMessage notification to host ERP system
+            if (window.parent) {
+                window.parent.postMessage({
+                    type: 'ERP_WORKFLOW_NAVIGATE',
+                    actionUrl: node.url,
+                    nodeId: node.id,
+                    title: node.title
+                }, '*');
+            }
+
+            // Direct URL navigation fallback
+            if (node.url && node.url !== '#') {
+                window.location.href = node.url;
+            } else {
+                alert("Azione eseguita per step: " + node.title + " (" + node.url + ")");
+            }
+        }
+
+        window.onload = init;
+    <\/script>
+</body>
+</html>`;
+        }
+
+        // --- Helpers ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
