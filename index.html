@@ -51,8 +51,8 @@
 
         /* Connection line styles */
         .connection-line {
-            stroke: #64748b;
-            stroke-width: 2.5;
+            stroke: #FDB913;
+            stroke-width: 2;
             fill: none;
             transition: stroke 0.2s, stroke-width 0.2s;
         }
@@ -62,6 +62,14 @@
             cursor: pointer;
         }
 
+        .connection-port { position:absolute; top:50%; transform:translateY(-50%); width:11px; height:11px; padding:0; border:2px solid white; border-radius:50%; background:#FDB913; box-shadow:0 0 0 1px #c38a00; cursor:crosshair; z-index:30; touch-action:none; }
+        .connection-port.port-left { left:-6px; }
+        .connection-port.port-right { right:-6px; }
+        .connection-port:hover { transform:translateY(-50%) scale(1.25); background:#e5a50d; }
+        #svgConnections .connection-hit { pointer-events:stroke; fill:none; stroke:transparent; stroke-width:18; cursor:pointer; }
+        #svgConnections .connection-line { pointer-events:none; }
+        .connection-line.is-selected { stroke:#d97706; stroke-width:4; stroke-dasharray:7 4; }
+        .connection-line { cursor:pointer; }
         /* Custom Scrollbars */
         ::-webkit-scrollbar {
             width: 6px;
@@ -98,7 +106,7 @@
 
         <!-- Dynamic Workflow Title Bar -->
         <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 min-w-[280px]">
-            <i data-lucide="edit-3" class="w-4 h-4 text-slate-400 mr-2"></i>
+            <button id="btnEditWorkflowTitle" type="button" class="mr-2 text-slate-300 hover:text-amber-400 focus:outline-none" title="Modifica titolo workflow" aria-label="Modifica titolo workflow"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
             <input type="text" id="workflowTitleInput" value="Gestione Flusso Operativo" 
                 class="bg-transparent text-white font-semibold text-sm focus:outline-none w-full placeholder-slate-500"
                 placeholder="Titolo Workflow..." title="Clicca per modificare il titolo">
@@ -140,13 +148,22 @@
             <!-- Panel 1: Add Node -->
             <div id="panelAddNode" class="p-5 space-y-4">
                 <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo label</label>
+                    <select id="nodeTypeInput" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"><option value="standard">Label standard</option><option value="links">Elenco link</option></select>
+                </div>
+                <div id="addLinksGroup" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Elenco link (una riga per link)</label>
+                    <textarea id="nodeLinksInput" rows="5" placeholder="Pagina A | https://esempio.it/a&#10;Pagina B | https://esempio.it/b" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></textarea>
+                    <p class="text-[10px] text-slate-500">Formato: Titolo | URL. Puoi usare anche percorsi relativi.</p>
+                </div>
+                <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Label / Step</label>
-                    <input type="text" id="nodeLabelInput" placeholder="es. Ordine d'Acquisto" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    <input type="text" id="nodeLabelInput" placeholder="es. Fase 01" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Sottotitolo / Descrizione</label>
-                    <input type="text" id="nodeSubInput" placeholder="es. Emissione & Approvazione" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    <input type="text" id="nodeSubInput" placeholder="es. Attività generica" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
                 </div>
 
                 <div>
@@ -159,14 +176,14 @@
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Badge di Stato / Categoria</label>
                     <div class="flex gap-2">
-                        <input type="text" id="nodeBadgeInput" placeholder="es. ACQUISTI" class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
-                        <input type="color" id="nodeBadgeColor" value="#3b82f6" class="w-10 h-9 p-1 border border-slate-300 rounded-lg cursor-pointer">
+                        <input type="text" id="nodeBadgeInput" placeholder="es. STEP 01" class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                        <input type="color" id="nodeBadgeColor" value="#FDB913" class="w-10 h-9 p-1 border border-slate-300 rounded-lg cursor-pointer">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Azione / URL ERP (al click)</label>
-                    <input type="text" id="nodeUrlInput" placeholder="es. /erp/purchase-orders/new" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
+                    <input type="text" id="nodeUrlInput" placeholder="es. /percorso/azione" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
                     <p class="text-[10px] text-slate-400 mt-1">Invia `postMessage` o naviga all'URL specificato.</p>
                 </div>
 
@@ -182,20 +199,25 @@
                     <div class="space-y-2">
                         <button id="presetProcurement" class="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-formula hover:bg-amber-50/50 transition flex items-center justify-between group">
                             <div>
-                                <div class="text-xs font-semibold text-slate-800">Ciclo Acquisti (Procurement)</div>
-                                <div class="text-[10px] text-slate-500">RDA, Ordine, DdT, Fattura</div>
+                                <div class="text-xs font-semibold text-slate-800">Flow standard</div>
+                                <div class="text-[10px] text-slate-500">Sequenza lineare di fasi generiche</div>
                             </div>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-formula"></i>
                         </button>
                         <button id="presetSales" class="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-formula hover:bg-amber-50/50 transition flex items-center justify-between group">
                             <div>
-                                <div class="text-xs font-semibold text-slate-800">Ciclo Vendite (Sales)</div>
-                                <div class="text-[10px] text-slate-500">Offerta, Ordine, Spedizione, Incasso</div>
+                                <div class="text-xs font-semibold text-slate-800">Flow a stella</div>
+                                <div class="text-[10px] text-slate-500">Nodo centrale e fasi collegate</div>
                             </div>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-formula"></i>
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <div id="selectedConnectionPanel" class="hidden mx-5 mb-4 p-3 border border-amber-300 bg-amber-50 rounded-lg">
+                <div class="text-xs font-semibold text-slate-700 mb-2">Freccia selezionata</div>
+                <button id="btnDeleteSelectedConnection" type="button" class="w-full rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold py-2">Elimina freccia</button>
             </div>
 
             <!-- Panel 2: Edit Selected Node -->
@@ -213,6 +235,14 @@
                         </button>
                     </div>
 
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo label</label>
+                        <select id="editNodeType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"><option value="standard">Label standard</option><option value="links">Elenco link</option></select>
+                    </div>
+                    <div id="editLinksGroup" class="hidden">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Elenco link (Titolo | URL)</label>
+                        <textarea id="editNodeLinks" rows="5" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></textarea>
+                    </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1">Titolo Label</label>
                         <input type="text" id="editNodeTitle" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-formula">
@@ -243,25 +273,25 @@
             <div class="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
                 <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                 <span id="canvasHeaderTitle" class="text-xs font-bold text-slate-700">Gestione Flusso Operativo</span>
-                <span class="text-xs text-slate-400">| Drag&Drop per spostare • Clicca 'Collega' per unire</span>
+                <span class="text-xs text-slate-400">| Trascina i pallini per collegare • Seleziona una freccia o una label e premi Canc per eliminarla</span>
             </div>
 
             <!-- Interactive SVG Overlay for Connections -->
-            <svg id="svgConnections" class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-width: 2000px; min-height: 2000px;">
+            <svg id="svgConnections" class="absolute inset-0 w-full h-full z-40" style="pointer-events:none; min-width: 2000px; min-height: 2000px;">
                 <defs>
                     <!-- Standard Marker Arrow -->
-                    <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                    <marker id="arrowhead" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#FDB913"/>
                     </marker>
                     <!-- Active/Hover Arrow Marker -->
-                    <marker id="arrowhead-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <marker id="arrowhead-active" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#FDB913"/>
                     </marker>
                 </defs>
             </svg>
 
             <!-- Container for Workflow Nodes -->
-            <div id="nodesContainer" class="relative w-[2000px] h-[2000px] z-10">
+            <div id="nodesContainer" class="relative w-[2000px] h-[2000px] z-30 pointer-events-none">
                 <!-- Nodes dynamically injected here -->
             </div>
         </main>
@@ -321,36 +351,28 @@
             "archive", "mail", "bar-chart", "clipboard", "box"
         ];
 
-        // Default Presets
+        // Preset dimostrativi con dati anonimi.
         const PRESETS = {
-            procurement: {
-                title: "Ciclo Passivo / Acquisti",
+            standard: {
+                title: "Flow standard",
                 nodes: [
-                    { id: "n1", x: 80, y: 150, title: "Richiesta d'Acquisto", sub: "RDA Utente / Reparto", icon: "file-text", badge: "RDA", badgeColor: "#3b82f6", url: "/erp/rda/new" },
-                    { id: "n2", x: 380, y: 150, title: "Ordine a Fornitore", sub: "Emissione & Invio ODA", icon: "shopping-cart", badge: "ODA", badgeColor: "#f59e0b", url: "/erp/orders/purchase" },
-                    { id: "n3", x: 680, y: 150, title: "Ricevimento Merce", sub: "Registrazione DdT / Magazzino", icon: "truck", badge: "DDT", badgeColor: "#10b981", url: "/erp/warehouse/goods-receive" },
-                    { id: "n4", x: 980, y: 150, title: "Fattura Passiva", sub: "Controllo & Contabilizzazione", icon: "receipt", badge: "FATTURA", badgeColor: "#8b5cf6", url: "/erp/invoices/incoming" }
+                    {id:"n1",x:100,y:240,title:"Fase 01",sub:"Attività iniziale",icon:"file-text",badge:"STEP 01",badgeColor:"#FDB913",url:"#"},
+                    {id:"n2",x:400,y:240,title:"Fase 02",sub:"Verifica intermedia",icon:"check-square",badge:"STEP 02",badgeColor:"#FDB913",url:"#"},
+                    {id:"n3",x:700,y:240,title:"Fase 03",sub:"Elaborazione",icon:"settings",badge:"STEP 03",badgeColor:"#FDB913",url:"#"},
+                    {id:"n4",x:1000,y:240,title:"Fase 04",sub:"Completamento",icon:"archive",badge:"STEP 04",badgeColor:"#FDB913",url:"#"}
                 ],
-                connections: [
-                    { id: "c1", from: "n1", to: "n2", label: "Approvazione" },
-                    { id: "c2", from: "n2", to: "n3", label: "Consegna" },
-                    { id: "c3", from: "n3", to: "n4", label: "Fatturazione" },
-                    { id: "c4", from: "n3", to: "n1", label: "Reso / Contesto" } // Loop back example
-                ]
+                connections:[{id:"c1",from:"n1",to:"n2",label:""},{id:"c2",from:"n2",to:"n3",label:""},{id:"c3",from:"n3",to:"n4",label:""}]
             },
-            sales: {
-                title: "Ciclo Attivo / Vendite",
+            star: {
+                title: "Flow a stella",
                 nodes: [
-                    { id: "s1", x: 80, y: 150, title: "Offerta Commerciale", sub: "Preventivo Cliente", icon: "file-text", badge: "PREVENTIVO", badgeColor: "#06b6d4", url: "/erp/quotes/new" },
-                    { id: "s2", x: 380, y: 150, title: "Ordine di Vendita", sub: "Conferma d'Ordine", icon: "shopping-cart", badge: "ORDINE", badgeColor: "#3b82f6", url: "/erp/orders/sales" },
-                    { id: "s3", x: 680, y: 150, title: "Spedizione / DdT", sub: "Evasione da Magazzino", icon: "package", badge: "SPEDIZIONE", badgeColor: "#10b981", url: "/erp/shipping/ddt" },
-                    { id: "s4", x: 980, y: 150, title: "Fattura Attiva", sub: "Emissione Fattura", icon: "receipt", badge: "FATTURA", badgeColor: "#ec4899", url: "/erp/invoices/outgoing" }
+                    {id:"hub",x:590,y:340,title:"Fase centrale",sub:"Coordinamento",icon:"database",badge:"HUB",badgeColor:"#FDB913",url:"#"},
+                    {id:"a",x:590,y:70,title:"Fase 01",sub:"Attività collegata",icon:"file-text",badge:"STEP 01",badgeColor:"#FDB913",url:"#"},
+                    {id:"b",x:1050,y:340,title:"Fase 02",sub:"Attività collegata",icon:"check-square",badge:"STEP 02",badgeColor:"#FDB913",url:"#"},
+                    {id:"c",x:590,y:610,title:"Fase 03",sub:"Attività collegata",icon:"archive",badge:"STEP 03",badgeColor:"#FDB913",url:"#"},
+                    {id:"d",x:130,y:340,title:"Fase 04",sub:"Attività collegata",icon:"users",badge:"STEP 04",badgeColor:"#FDB913",url:"#"}
                 ],
-                connections: [
-                    { id: "cs1", from: "s1", to: "s2", label: "Accettazione" },
-                    { id: "cs2", from: "s2", to: "s3", label: "Preparazione" },
-                    { id: "cs3", from: "s3", to: "s4", label: "Contabilità" }
-                ]
+                connections:[{id:"c1",from:"hub",to:"a",label:""},{id:"c2",from:"hub",to:"b",label:""},{id:"c3",from:"hub",to:"c",label:""},{id:"c4",from:"hub",to:"d",label:""}]
             }
         };
 
@@ -363,13 +385,17 @@
         // --- Initialization ---
         window.addEventListener('DOMContentLoaded', () => {
             initIconPicker();
-            loadPreset('procurement');
+            loadPreset('standard');
             setupEventListeners();
             lucide.createIcons();
         });
 
         function setupEventListeners() {
             // Workflow Title Binding
+            document.getElementById('btnEditWorkflowTitle').addEventListener('click', () => {
+                workflowTitleInput.focus();
+                workflowTitleInput.select();
+            });
             workflowTitleInput.addEventListener('input', (e) => {
                 state.title = e.target.value || "Workflow ERP";
                 canvasHeaderTitle.textContent = state.title;
@@ -385,11 +411,15 @@
             document.getElementById('btnDownloadHtml').addEventListener('click', downloadExportedHtml);
 
             // Presets
-            document.getElementById('presetProcurement').addEventListener('click', () => loadPreset('procurement'));
-            document.getElementById('presetSales').addEventListener('click', () => loadPreset('sales'));
+            document.getElementById('presetProcurement').addEventListener('click', () => loadPreset('standard'));
+            document.getElementById('presetSales').addEventListener('click', () => loadPreset('star'));
 
             // Edit Panel Controls
             document.getElementById('btnDeleteSelectedNode').addEventListener('click', deleteSelectedNode);
+            document.getElementById('btnDeleteSelectedConnection').addEventListener('click', () => { if (!selectedConnectionId) return; state.connections=state.connections.filter(c=>c.id!==selectedConnectionId); selectedConnectionId=null; renderWorkflow(); showToast('Freccia eliminata'); });
+            document.getElementById('nodeTypeInput').addEventListener('change', e => document.getElementById('addLinksGroup').classList.toggle('hidden',e.target.value!=='links'));
+            document.getElementById('editNodeType').addEventListener('change', updateSelectedNodeFromForm);
+            document.getElementById('editNodeLinks').addEventListener('input', updateSelectedNodeFromForm);
             document.getElementById('editNodeTitle').addEventListener('input', updateSelectedNodeFromForm);
             document.getElementById('editNodeSub').addEventListener('input', updateSelectedNodeFromForm);
             document.getElementById('editNodeBadge').addEventListener('input', updateSelectedNodeFromForm);
@@ -402,7 +432,7 @@
             // Canvas Click (Deselect)
             document.getElementById('canvasContainer').addEventListener('click', (e) => {
                 if (e.target.id === 'canvasContainer' || e.target.id === 'nodesContainer' || e.target.tagName === 'svg') {
-                    selectNode(null);
+                    selectedConnectionId=null; selectNode(null);
                 }
             });
         }
@@ -413,7 +443,7 @@
             AVAILABLE_ICONS.forEach(iconName => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = `p-2 rounded-lg border text-slate-600 hover:border-formula hover:bg-amber-50 flex items-center justify-center transition ${state.selectedIcon === iconName ? 'border-formula bg-amber-50 text-slate-900 ring-2 ring-formula/40' : 'border-slate-200'}`;
+                btn.className = `p-2 rounded-lg border text-slate-600 hover:border-formula hover:bg-amber-50 flex items-center justify-center transition ${state.selectedIcon === iconName ? 'border-formula bg-amber-50 text-slate-900 ring-2 ring-formula/40' : 'border-slate-300'}`;
                 btn.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
                 btn.addEventListener('click', () => {
                     state.selectedIcon = iconName;
@@ -431,12 +461,14 @@
             canvasHeaderTitle.textContent = state.title;
             state.nodes = [];
             state.connections = [];
+            selectedConnectionId=null;
             selectNode(null);
             renderWorkflow();
             showToast("Foglio bianco creato");
         }
 
         function loadPreset(key) {
+            selectedConnectionId = null;
             const preset = PRESETS[key];
             if (!preset) return;
             state.title = preset.title;
@@ -444,11 +476,30 @@
             canvasHeaderTitle.textContent = preset.title;
             state.nodes = JSON.parse(JSON.stringify(preset.nodes));
             state.connections = JSON.parse(JSON.stringify(preset.connections));
+            selectedConnectionId=null;
             selectNode(null);
             renderWorkflow();
             showToast(`Preset "${preset.title}" caricato`);
         }
 
+        function parseLinks(raw) {
+            return raw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+                const split=line.indexOf('|');
+                return {title:(split<0?line:line.slice(0,split)).trim(),url:(split<0?'#':line.slice(split+1)).trim()||'#'};
+            });
+        }
+        function escapeHtml(value) {
+            return String(value??'').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+        function safeLink(url) {
+            const u=String(url||'#').trim();
+            return /^(https?:\/\/|\/|#|\.\/?)/i.test(u)?u:'#';
+        }
+        function linkListMarkup(node) {
+            if (node.type!=='links') return '';
+            const links=(node.links||[]).map(link=>`<a class="block text-xs text-amber-800 hover:underline truncate py-1" href="${escapeHtml(safeLink(link.url))}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.title)}">↗ ${escapeHtml(link.title)}</a>`).join('');
+            return `<div class="mt-2 pt-2 border-t border-slate-100">${links||'<span class="text-xs text-slate-400">Nessun link</span>'}</div>`;
+        }
         // --- Node Operations ---
         function handleAddNode() {
             const labelInput = document.getElementById('nodeLabelInput');
@@ -473,7 +524,9 @@
                 icon: state.selectedIcon,
                 badge: badge,
                 badgeColor: badgeColor,
-                url: url
+                url: url,
+                type: document.getElementById('nodeTypeInput').value,
+                links: parseLinks(document.getElementById('nodeLinksInput').value)
             };
 
             state.nodes.push(newNode);
@@ -481,6 +534,7 @@
             subInput.value = '';
             badgeInput.value = '';
             urlInput.value = '';
+            document.getElementById('nodeLinksInput').value='';
 
             renderWorkflow();
             selectNode(newNode.id);
@@ -506,6 +560,9 @@
             node.sub = document.getElementById('editNodeSub').value;
             node.badge = document.getElementById('editNodeBadge').value.toUpperCase();
             node.url = document.getElementById('editNodeUrl').value;
+            node.type = document.getElementById('editNodeType').value;
+            node.links = parseLinks(document.getElementById('editNodeLinks').value);
+            document.getElementById('editLinksGroup').classList.toggle('hidden',node.type!=='links');
 
             renderWorkflow();
         }
@@ -524,7 +581,7 @@
                     // Create connection
                     const exists = state.connections.some(c => c.from === state.connectingSourceId && c.to === id);
                     if (!exists) {
-                        const connLabel = prompt("Etichetta del collegamento (opzionale, es. Approvazione):", "") || "";
+                        const connLabel = prompt("Etichetta del collegamento (opzionale):", "") || "";
                         state.connections.push({
                             id: 'conn_' + Date.now(),
                             from: state.connectingSourceId,
@@ -543,6 +600,8 @@
 
             // Normal selection
             if (id) {
+                selectedConnectionId=null;
+                document.getElementById('selectedConnectionPanel').classList.add('hidden');
                 switchTab('edit');
                 const node = state.nodes.find(n => n.id === id);
                 if (node) {
@@ -552,6 +611,9 @@
                     document.getElementById('editNodeSub').value = node.sub || '';
                     document.getElementById('editNodeBadge').value = node.badge || '';
                     document.getElementById('editNodeUrl').value = node.url || '';
+                    document.getElementById('editNodeType').value=node.type||'standard';
+                    document.getElementById('editNodeLinks').value=(node.links||[]).map(l=>l.title+' | '+l.url).join('\n');
+                    document.getElementById('editLinksGroup').classList.toggle('hidden',node.type!=='links');
                 }
             } else {
                 document.getElementById('noSelectionMsg').classList.remove('hidden');
@@ -602,6 +664,58 @@
             }
         }
 
+        let selectedConnectionId = null;
+        let connectionDrag = null;
+        const canvasContainer = document.getElementById('canvasContainer');
+        function canvasPoint(e) {
+            const r = canvasContainer.getBoundingClientRect();
+            return { x: e.clientX-r.left+canvasContainer.scrollLeft, y:e.clientY-r.top+canvasContainer.scrollTop };
+        }
+        function portAnchor(node,side) {
+            const port=document.getElementById(node.id)?.querySelector('.port-'+side);
+            if (port) {
+                const r=port.getBoundingClientRect(), canvas=canvasContainer.getBoundingClientRect();
+                return {x:r.left+r.width/2-canvas.left+canvasContainer.scrollLeft,
+                        y:r.top+r.height/2-canvas.top+canvasContainer.scrollTop};
+            }
+            return {x:node.x+(side==='right'?240:0),y:node.y+60};
+        }
+        function beginConnection(e, node, side) {
+            e.preventDefault(); e.stopPropagation();
+            const pt=canvasPoint(e);
+            connectionDrag={from:node.id, side, start:portAnchor(node,side), end:pt};
+            document.addEventListener('pointermove', moveConnection);
+            document.addEventListener('pointerup', finishConnection, {once:true});
+            renderConnections();
+        }
+        function moveConnection(e) { if (!connectionDrag) return; connectionDrag.end=canvasPoint(e); renderConnections(); }
+        function finishConnection(e) {
+            document.removeEventListener('pointermove', moveConnection);
+            if (!connectionDrag) return;
+            const from=connectionDrag.from;
+            const connectionDragSide=connectionDrag.side;
+            const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.wf-node');
+            const targetNode=state.nodes.find(n=>n.id===target?.id);
+            const targetSide=targetNode ? (canvasPoint(e).x < targetNode.x+120 ? 'left':'right') : 'left';
+            connectionDrag=null;
+            if (targetNode && targetNode.id!==from && !state.connections.some(c=>c.from===from && c.to===targetNode.id)) {
+                state.connections.push({id:'conn_'+Date.now(),from,to:targetNode.id,fromSide:connectionDragSide,toSide:targetSide,label:''});
+                showToast('Freccia creata. Clicca la freccia e premi Canc per eliminarla.');
+            }
+            renderWorkflow();
+        }
+        document.addEventListener('keydown', e => {
+            if (!['Delete','Backspace'].includes(e.key)) return;
+            if (e.target.closest('input,textarea,[contenteditable="true"]')) return;
+            if (!selectedConnectionId && !state.selectedNodeId) return;
+            e.preventDefault();
+            if (selectedConnectionId) {
+                state.connections=state.connections.filter(c=>c.id!==selectedConnectionId);
+                selectedConnectionId=null;
+                document.getElementById('selectedConnectionPanel').classList.add('hidden');
+                renderWorkflow(); showToast('Freccia eliminata');
+            } else { deleteSelectedNode(); }
+        });
         // --- Render Engine ---
         function renderWorkflow() {
             // 1. Render Nodes
@@ -612,29 +726,41 @@
 
                 const nodeEl = document.createElement('div');
                 nodeEl.id = node.id;
-                nodeEl.className = `absolute wf-node bg-white rounded-xl border-2 shadow-md p-4 w-60 cursor-move ${isSelected ? 'selected border-formula' : isConnSource ? 'connecting-source' : 'border-slate-200'}`;
+                nodeEl.className = `absolute wf-node bg-white rounded-xl border shadow-sm p-3 w-60 cursor-move ${isSelected ? 'selected border-formula' : isConnSource ? 'connecting-source' : 'border-slate-300'}`;
+                nodeEl.style.pointerEvents = "auto";
                 nodeEl.style.left = `${node.x}px`;
                 nodeEl.style.top = `${node.y}px`;
 
                 nodeEl.innerHTML = `
                     <div class="flex items-start justify-between mb-2">
-                        <div class="w-9 h-9 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center font-bold">
+                        <div class="w-9 h-9 rounded-lg bg-white text-slate-800 flex items-center justify-center font-bold">
                             <i data-lucide="${node.icon || 'file-text'}" class="w-5 h-5"></i>
                         </div>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white shadow-sm" style="background-color: ${node.badgeColor || '#3b82f6'}">
-                            ${node.badge || 'STEP'}
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-slate-700 border border-slate-200" style="background-color: #fff8e4">
+                            ${escapeHtml(node.badge || 'STEP')}
                         </span>
                     </div>
-                    <h4 class="font-bold text-sm text-slate-800 leading-tight">${node.title}</h4>
-                    <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">${node.sub || ''}</p>
+                    <h4 class="font-bold text-sm text-slate-800 leading-tight">${escapeHtml(node.title)}</h4>
+                    <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">${escapeHtml(node.sub || '')}</p>
+                    ${linkListMarkup(node)}
                     <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                        <span class="truncate max-w-[140px] font-mono">${node.url || '#'}</span>
+                        <span class="truncate max-w-[140px] font-mono">${escapeHtml(node.url || '#')}</span>
                         <i data-lucide="external-link" class="w-3 h-3 text-slate-400"></i>
                     </div>
                 `;
 
+                ['left','right'].forEach(side => {
+                    const port=document.createElement('button');
+                    port.type='button'; port.className='connection-port port-'+side;
+                    port.title='Trascina per collegare un altro nodo';
+                    port.setAttribute('aria-label','Collega '+node.title+' dal lato '+side);
+                    port.addEventListener('pointerdown',e=>beginConnection(e,node,side));
+                    port.addEventListener('click',e=>e.stopPropagation());
+                    nodeEl.appendChild(port);
+                });
                 // Events
                 nodeEl.addEventListener('click', (e) => {
+                    if (e.target.closest('a')) return;
                     e.stopPropagation();
                     selectNode(node.id);
                 });
@@ -658,52 +784,45 @@
                 const target = state.nodes.find(n => n.id === conn.to);
                 if (!source || !target) return;
 
-                // Card Dimensions (w-60 -> 240px width, height ~ 120px)
-                const nodeWidth = 240;
-                const nodeHeight = 120;
-
-                // Calculate Centers/Anchors
-                const sX = source.x + nodeWidth / 2;
-                const sY = source.y + nodeHeight / 2;
-                const tX = target.x + nodeWidth / 2;
-                const tY = target.y + nodeHeight / 2;
-
-                let pathData = "";
-                let labelX = (sX + tX) / 2;
-                let labelY = (sY + tY) / 2;
-
-                // Is it a return/loop connection? (target is to the left or vertical return)
-                const isReturn = target.x < source.x;
-
-                if (isReturn) {
-                    // Curved arc above or below
-                    const curveOffset = Math.abs(sX - tX) * 0.4 + 50;
-                    const controlY = Math.min(sY, tY) - curveOffset;
-                    pathData = `M ${sX} ${source.y} C ${sX} ${controlY}, ${tX} ${controlY}, ${tX} ${target.y}`;
-                    labelY = controlY + 15;
-                } else {
-                    // Direct smooth bezier curve horizontally
-                    const dx = Math.abs(tX - sX) * 0.5;
-                    pathData = `M ${source.x + nodeWidth} ${sY} C ${source.x + nodeWidth + dx} ${sY}, ${target.x - dx} ${tY}, ${target.x} ${tY}`;
-                }
+                const fromSide=conn.fromSide || (target.x>=source.x?'right':'left');
+                const toSide=conn.toSide || (source.x<=target.x?'left':'right');
+                const a=portAnchor(source,fromSide), b=portAnchor(target,toSide);
+                const x1=a.x,y1=a.y,x2=b.x,y2=b.y;
+                const bend=Math.max(55,Math.abs(x2-x1)*0.48);
+                const d1=fromSide==='right'?1:-1, d2=toSide==='right'?1:-1;
+                const pathData=`M ${x1} ${y1} C ${x1+d1*bend} ${y1}, ${x2+d2*bend} ${y2}, ${x2} ${y2}`;
+                const labelX=(x1+x2)/2, labelY=(y1+y2)/2-12;
 
                 // Path Element
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', pathData);
-                path.setAttribute('class', 'connection-line');
+                path.setAttribute('class', 'connection-line'+(selectedConnectionId===conn.id?' is-selected':''));
+                path.style.pointerEvents = 'none';
                 path.setAttribute('marker-end', 'url(#arrowhead)');
                 
-                // Allow deleting connection on click
-                path.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm("Vuoi rimuovere questo collegamento?")) {
-                        state.connections = state.connections.filter(c => c.id !== conn.id);
-                        renderWorkflow();
-                        showToast("Collegamento rimosso");
-                    }
-                });
-
                 svgConnections.appendChild(path);
+                const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+                hit.setAttribute('d',pathData);
+                hit.setAttribute('class','connection-hit');
+                hit.addEventListener('click',e=>{
+                    e.stopPropagation();
+                });
+                hit.addEventListener('pointerdown',e=>{
+                    e.stopPropagation();
+                    selectedConnectionId=conn.id;
+                    document.getElementById('selectedConnectionPanel').classList.remove('hidden');
+                    state.selectedNodeId=null;
+                    document.getElementById('editForm').classList.add('hidden');
+                    document.getElementById('noSelectionMsg').classList.remove('hidden');
+                    renderConnections();
+                    showToast('Freccia selezionata: premi Canc o Backspace');
+                });
+                hit.addEventListener('dblclick',e=>{
+                    e.stopPropagation();
+                    state.connections=state.connections.filter(c=>c.id!==conn.id);
+                    selectedConnectionId=null; renderWorkflow(); showToast('Freccia eliminata');
+                });
+                svgConnections.appendChild(hit);
 
                 // Connection Label Badge if exists
                 if (conn.label) {
@@ -733,6 +852,16 @@
                     svgConnections.appendChild(textGroup);
                 }
             });
+            if (connectionDrag) {
+                const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+                const a=connectionDrag.start,b=connectionDrag.end;
+                const dir=connectionDrag.side==='right'?1:-1;
+                const bend=Math.max(55,Math.abs(b.x-a.x)*0.48);
+                p.setAttribute('d',`M ${a.x} ${a.y} C ${a.x+dir*bend} ${a.y}, ${b.x-dir*bend} ${b.y}, ${b.x} ${b.y}`);
+                p.setAttribute('class','connection-line'); p.setAttribute('stroke-dasharray','6 5');
+                p.setAttribute('marker-end','url(#arrowhead)');
+                svgConnections.appendChild(p);
+            }
         }
 
         // --- Drag & Drop Mechanics ---
@@ -742,7 +871,7 @@
             element.addEventListener('mousedown', dragMouseDown);
 
             function dragMouseDown(e) {
-                if (e.target.closest('button')) return; // Ignore button clicks inside node
+                if (e.target.closest('button,a')) return; // Ignore button clicks inside node
                 e.preventDefault();
                 startX = e.clientX;
                 startY = e.clientY;
@@ -805,8 +934,8 @@
         }
 
         function generateStandaloneHTML() {
-            const jsonNodes = JSON.stringify(state.nodes, null, 2);
-            const jsonConns = JSON.stringify(state.connections, null, 2);
+            const jsonNodes = JSON.stringify(state.nodes, null, 2).replace(/</g, "\\u003c");
+            const jsonConns = JSON.stringify(state.connections, null, 2).replace(/</g, "\\u003c");
 
             return `<!DOCTYPE html>
 <html lang="it">
@@ -836,7 +965,7 @@
             transform: translateY(-3px);
             box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.15);
         }
-        .connection-line { stroke: #64748b; stroke-width: 2.5; fill: none; }
+        .connection-line { stroke: #FDB913; stroke-width: 2; fill: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
@@ -862,8 +991,8 @@
     <main class="flex-1 relative canvas-bg overflow-auto p-8 min-h-[600px]" id="canvas">
         <svg id="svgOverlay" class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-width: 1500px; min-height: 1000px;">
             <defs>
-                <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                <marker id="arrowhead" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#FDB913"/>
                 </marker>
             </defs>
         </svg>
@@ -888,17 +1017,18 @@
             // Render Nodes
             nodes.forEach(node => {
                 const card = document.createElement('div');
-                card.className = "absolute wf-card bg-white rounded-xl border border-slate-200 shadow-md p-4 w-60 cursor-pointer hover:border-formula";
+                card.className = "absolute wf-card bg-white rounded-lg border border-slate-300 border-b-[3px] border-b-amber-400 shadow-sm p-3 w-60 cursor-pointer hover:border-formula";
+                card.id = node.id;
                 card.style.left = node.x + 'px';
                 card.style.top = node.y + 'px';
                 card.onclick = () => handleNodeClick(node);
 
                 card.innerHTML = \`
                     <div class="flex items-start justify-between mb-2">
-                        <div class="w-9 h-9 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center font-bold">
+                        <div class="w-9 h-9 rounded-lg bg-white text-slate-800 flex items-center justify-center font-bold">
                             <i data-lucide="\${node.icon || 'file-text'}" class="w-5 h-5"></i>
                         </div>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white shadow-sm" style="background-color: \${node.badgeColor || '#3b82f6'}">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-slate-700 border border-slate-200" style="background-color: #fff8e4">
                             \${node.badge || 'STEP'}
                         </span>
                     </div>
@@ -909,6 +1039,20 @@
                         <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                     </div>
                 \`;
+                if (node.type === 'links') {
+                    const list=document.createElement('div');
+                    list.className='px-3 pb-3';
+                    (node.links||[]).forEach(link=>{
+                        const a=document.createElement('a');
+                        a.textContent='↗ '+link.title;
+                        a.href=['https:', 'http:'].some(prefix => (link.url || '').toLowerCase().startsWith(prefix)) || (link.url || '').startsWith('/') || (link.url || '').startsWith('#') || (link.url || '').startsWith('./') ? link.url : '#';
+                        a.target='_blank'; a.rel='noopener noreferrer';
+                        a.className='block text-xs text-amber-800 hover:underline py-1';
+                        a.onclick=e=>e.stopPropagation();
+                        list.appendChild(a);
+                    });
+                    card.appendChild(list);
+                }
                 container.appendChild(card);
             });
 
@@ -918,24 +1062,16 @@
                 const tgt = nodes.find(n => n.id === conn.to);
                 if (!src || !tgt) return;
 
-                const nodeWidth = 240, nodeHeight = 120;
-                const sX = src.x + nodeWidth / 2, sY = src.y + nodeHeight / 2;
-                const tX = tgt.x + nodeWidth / 2, tY = tgt.y + nodeHeight / 2;
-
-                const isReturn = tgt.x < src.x;
-                let pathData = "";
-                let labelX = (sX + tX) / 2;
-                let labelY = (sY + tY) / 2;
-
-                if (isReturn) {
-                    const curveOffset = Math.abs(sX - tX) * 0.4 + 50;
-                    const controlY = Math.min(sY, tY) - curveOffset;
-                    pathData = \`M \${sX} \${src.y} C \${sX} \${controlY}, \${tX} \${controlY}, \${tX} \${tgt.y}\`;
-                    labelY = controlY + 15;
-                } else {
-                    const dx = Math.abs(tX - sX) * 0.5;
-                    pathData = \`M \${src.x + nodeWidth} \${sY} C \${src.x + nodeWidth + dx} \${sY}, \${tgt.x - dx} \${tY}, \${tgt.x} \${tY}\`;
-                }
+                const fromSide=conn.fromSide || (tgt.x>=src.x?'right':'left');
+                const toSide=conn.toSide || (src.x<=tgt.x?'left':'right');
+                const sh=document.getElementById(src.id)?.offsetHeight || 125;
+                const th=document.getElementById(tgt.id)?.offsetHeight || 125;
+                const x1=src.x+(fromSide==='right'?240:0),y1=src.y+sh/2;
+                const x2=tgt.x+(toSide==='right'?240:0),y2=tgt.y+th/2;
+                const bend=Math.max(55,Math.abs(x2-x1)*0.48);
+                const d1=fromSide==='right'?1:-1,d2=toSide==='right'?1:-1;
+                const pathData = \`M \${x1} \${y1} C \${x1+d1*bend} \${y1}, \${x2+d2*bend} \${y2}, \${x2} \${y2}\`;
+                const labelX=(x1+x2)/2,labelY=(y1+y2)/2-12;
 
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', pathData);
